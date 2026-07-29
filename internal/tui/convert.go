@@ -47,23 +47,64 @@ func (a *App) conversionNote(magnet string) string {
 	}
 	if !job.done {
 		if job.total <= 1 {
-			return "remuxing → mp4"
+			return "converting mkv → mp4"
 		}
-		return fmt.Sprintf("remuxing → mp4 (%d files)", job.total)
+		return fmt.Sprintf("converting mkv → mp4 (%d files)", job.total)
 	}
 	if job.converted > 0 && job.failed == 0 {
 		if job.converted == 1 {
-			return "remuxed to mp4"
+			return "mp4 ready"
 		}
-		return fmt.Sprintf("remuxed %d files to mp4", job.converted)
+		return fmt.Sprintf("%d mp4 files ready", job.converted)
 	}
 	if job.converted > 0 {
-		return fmt.Sprintf("remuxed %d to mp4 · %d failed", job.converted, job.failed)
+		return fmt.Sprintf("%d mp4 ready · %d failed", job.converted, job.failed)
 	}
 	if job.lastErr != "" {
-		return "remux failed: " + truncate(job.lastErr, 48)
+		return "convert failed: " + truncate(job.lastErr, 48)
 	}
 	return ""
+}
+
+func (a *App) hasMKVForRemux(it downloadItem) bool {
+	if !a.remuxEnabled() || !convert.Available() {
+		return false
+	}
+	return len(a.mkvPathsForRemux(it.Hash, it.DownloadDir, it.DataPath)) > 0
+}
+
+func (a *App) manualRemuxDownload(it downloadItem) tea.Cmd {
+	if !a.remuxEnabled() {
+		a.errText = "mkv → mp4 conversion is disabled in config"
+		return clearErrCmd()
+	}
+	if !convert.Available() {
+		a.errText = "ffmpeg not found in PATH"
+		return clearErrCmd()
+	}
+	switch it.State {
+	case engine.StateDone, engine.StateSeeding, engine.StatePaused:
+	default:
+		if it.State == engine.StateMissing {
+			a.errText = "missing files — relink before converting"
+		} else {
+			a.errText = "wait for download to finish before converting"
+		}
+		return clearErrCmd()
+	}
+	a.initConvertTracker()
+	if job := a.convertJobs[it.Magnet]; job != nil && !job.done {
+		a.errText = "conversion already running"
+		return clearErrCmd()
+	}
+	delete(a.convertJobs, it.Magnet)
+	paths := a.mkvPathsForRemux(it.Hash, it.DownloadDir, it.DataPath)
+	if len(paths) == 0 {
+		a.errText = "no mkv files to convert"
+		return clearErrCmd()
+	}
+	a.convertJobs[it.Magnet] = &convertJob{magnet: it.Magnet, total: len(paths)}
+	return tea.Batch(a.runRemux(it.Magnet, paths), a.ensureTick())
 }
 
 func (a *App) conversionsActive() bool {

@@ -143,6 +143,10 @@ func (a *App) updateDownloads(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if it, ok := a.selectedDownload(items); ok {
 			d.confirmRemove = &removeConfirm{item: it, deleteData: true}
 		}
+	case "c":
+		if it, ok := a.selectedDownload(items); ok {
+			return a, a.manualRemuxDownload(it)
+		}
 	}
 	return a, nil
 }
@@ -594,7 +598,7 @@ func (a *App) viewDownloads() string {
 		return a.chrome("downloads", body, hints(hint("tab", "screens"), hint("q", "quit")))
 	}
 
-	d.bar.Width = max(20, min(64, width-40))
+	d.bar.Width = max(20, width-4)
 	listRows := a.downloadListRows()
 	start, end := d.win.clamp(len(items), listRows)
 
@@ -613,7 +617,15 @@ func (a *App) viewDownloads() string {
 		b.WriteString("\n" + rule(width) + "\n" + detail)
 	}
 
-	help := hints(hint("↑↓", "move"), hint("p", "pause"), hint("s", "seed"), hint("v", "verify"), hint("m", "move"), hint("r", "relink"), hint("x", "remove"), hint("d", "delete"), hint("H", "health"), hint("esc", "search"))
+	helpParts := []string{
+		hint("↑↓", "move"), hint("p", "pause"), hint("s", "seed"), hint("v", "verify"),
+		hint("m", "move"), hint("r", "relink"), hint("x", "remove"), hint("d", "delete"),
+	}
+	if a.remuxEnabled() && convert.Available() {
+		helpParts = append(helpParts, hint("c", "mkv→mp4"))
+	}
+	helpParts = append(helpParts, hint("H", "health"), hint("esc", "search"))
+	help := hints(helpParts...)
 	if d.confirmRemove != nil {
 		verb := "remove from list"
 		if d.confirmRemove.deleteData {
@@ -634,27 +646,53 @@ func (a *App) renderDownloadItem(it downloadItem, selected bool, width int) stri
 		marker = styleSelBar.Render("▍ ")
 		nameStyle = lipgloss.NewStyle().Foreground(colBrand).Bold(true)
 	}
-	name := marker + nameStyle.Render(truncate(it.Name, max(20, width-6)))
+
+	name := truncate(it.Name, max(16, width-24))
 	if it.State == engine.StateMissing {
 		name += " " + styleErr.Render("missing")
 	}
-	pct := fmt.Sprintf("%5.1f%%", it.Progress()*100)
-	bar := "  " + a.downloads.bar.ViewAs(it.Progress()) + "  " + styleDim.Render(pct)
-	stats := fmt.Sprintf("  %s / %s   %s   ETA %s   %s %d/%d   %s",
-		humanBytes(it.BytesCompleted),
-		humanBytes(it.Length),
-		humanSpeed(it.SpeedBps),
-		fmtETA(it.ETA),
-		styleFaint.Render("peers"), it.PeersActive, it.PeersTotal,
-		stateBadge(it.State),
-	)
-	if it.Note != "" {
-		stats += "   " + styleFaint.Render(it.Note)
+	headerLeft := marker + nameStyle.Render(name)
+
+	right := stateBadge(it.State)
+	if it.State == engine.StateDownloading || it.State == engine.StateFetchingMeta || it.State == engine.StatePreviewing {
+		right += " · " + fmt.Sprintf("%.0f%%", it.Progress()*100)
+	}
+	headerRight := styleDim.Render(right)
+	pad := max(1, width-lipgloss.Width(headerLeft)-lipgloss.Width(headerRight))
+	line1 := headerLeft + strings.Repeat(" ", pad) + headerRight
+
+	barLine := "  " + a.downloads.bar.ViewAs(it.Progress())
+
+	var meta string
+	switch it.State {
+	case engine.StateDownloading, engine.StateFetchingMeta, engine.StatePreviewing:
+		meta = fmt.Sprintf("%s / %s · %s · ETA %s · %d/%d peers",
+			humanBytes(it.BytesCompleted),
+			humanBytes(it.Length),
+			humanSpeed(it.SpeedBps),
+			fmtETA(it.ETA),
+			it.PeersActive, it.PeersTotal,
+		)
+	case engine.StateSeeding:
+		meta = fmt.Sprintf("%s · seeding · %d/%d peers", humanBytes(it.Length), it.PeersActive, it.PeersTotal)
+	case engine.StateDone:
+		meta = humanBytes(it.Length) + " · complete"
+	default:
+		if it.Note != "" {
+			meta = it.Note
+		}
+	}
+
+	lines := []string{line1, barLine}
+	if meta != "" {
+		lines = append(lines, styleFaint.Render("  "+meta))
 	}
 	if note := a.conversionNote(it.Magnet); note != "" {
-		stats += "   " + styleOK.Render(note)
+		lines = append(lines, "  "+styleOK.Render(note))
+	} else if a.hasMKVForRemux(it) && (it.State == engine.StateDone || it.State == engine.StateSeeding || it.State == engine.StatePaused) {
+		lines = append(lines, "  "+styleFaint.Render("mkv ready · press c to convert"))
 	}
-	return name + "\n" + bar + "\n" + styleDim.Render(stats) + "\n"
+	return strings.Join(lines, "\n") + "\n"
 }
 
 func (it downloadItem) Progress() float64 {
@@ -684,10 +722,10 @@ func (a *App) downloadDetail(it downloadItem, width int) string {
 		styleFaint.Render("root  ") + styleDim.Render(truncate(it.DownloadDir, width-7)),
 		styleFaint.Render("seed  ") + styleDim.Render(seed) + styleFaint.Render("   status  ") + stateBadge(it.State),
 		styleFaint.Render("size  ") + styleDim.Render(fmt.Sprintf("%s selected", humanBytes(it.Length))),
-		styleFaint.Render("keys  ") + styleDim.Render("m move folder · r relink existing files · d delete data"),
+		styleFaint.Render("keys  ") + styleDim.Render("m move · r relink · c mkv→mp4 · d delete data"),
 	}
 	if a.remuxEnabled() && convert.Available() {
-		lines = append(lines, styleFaint.Render("video ")+styleDim.Render("mkv → mp4 remux after download (ffmpeg stream copy)"))
+		lines = append(lines, styleFaint.Render("video ")+styleDim.Render("mkv auto-converts to mp4 after download · press c to convert manually"))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -697,7 +735,7 @@ func (a *App) downloadListRows() int {
 	if body >= 14 {
 		body -= 6
 	}
-	return max(1, body/4)
+	return max(1, body/3)
 }
 
 func (a *App) downloadsContext(items []downloadItem) string {
