@@ -13,7 +13,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/anacrolix/torrent/metainfo"
-	"github.com/maxiguillermo1/pork/internal/convert"
 	"github.com/maxiguillermo1/pork/internal/engine"
 	"github.com/maxiguillermo1/pork/internal/state"
 )
@@ -142,10 +141,6 @@ func (a *App) updateDownloads(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "d":
 		if it, ok := a.selectedDownload(items); ok {
 			d.confirmRemove = &removeConfirm{item: it, deleteData: true}
-		}
-	case "c":
-		if it, ok := a.selectedDownload(items); ok {
-			return a, a.manualRemuxDownload(it)
 		}
 	}
 	return a, nil
@@ -617,15 +612,7 @@ func (a *App) viewDownloads() string {
 		b.WriteString("\n" + rule(width) + "\n" + detail)
 	}
 
-	helpParts := []string{
-		hint("↑↓", "move"), hint("p", "pause"), hint("s", "seed"), hint("v", "verify"),
-		hint("m", "move"), hint("r", "relink"), hint("x", "remove"), hint("d", "delete"),
-	}
-	if a.remuxEnabled() && convert.Available() {
-		helpParts = append(helpParts, hint("c", "mkv→mp4"))
-	}
-	helpParts = append(helpParts, hint("H", "health"), hint("esc", "search"))
-	help := hints(helpParts...)
+	help := hints(hint("↑↓", "move"), hint("p", "pause"), hint("s", "seed"), hint("v", "verify"), hint("m", "move"), hint("r", "relink"), hint("x", "remove"), hint("d", "delete"), hint("H", "health"), hint("esc", "search"))
 	if d.confirmRemove != nil {
 		verb := "remove from list"
 		if d.confirmRemove.deleteData {
@@ -687,11 +674,6 @@ func (a *App) renderDownloadItem(it downloadItem, selected bool, width int) stri
 	if meta != "" {
 		lines = append(lines, styleFaint.Render("  "+meta))
 	}
-	if note := a.conversionNote(it.Magnet); note != "" {
-		lines = append(lines, "  "+styleOK.Render(note))
-	} else if a.hasMKVForRemux(it) && (it.State == engine.StateDone || it.State == engine.StateSeeding || it.State == engine.StatePaused) {
-		lines = append(lines, "  "+styleFaint.Render("mkv ready · press c to convert"))
-	}
 	return strings.Join(lines, "\n") + "\n"
 }
 
@@ -722,10 +704,7 @@ func (a *App) downloadDetail(it downloadItem, width int) string {
 		styleFaint.Render("root  ") + styleDim.Render(truncate(it.DownloadDir, width-7)),
 		styleFaint.Render("seed  ") + styleDim.Render(seed) + styleFaint.Render("   status  ") + stateBadge(it.State),
 		styleFaint.Render("size  ") + styleDim.Render(fmt.Sprintf("%s selected", humanBytes(it.Length))),
-		styleFaint.Render("keys  ") + styleDim.Render("m move · r relink · c mkv→mp4 · d delete data"),
-	}
-	if a.remuxEnabled() && convert.Available() {
-		lines = append(lines, styleFaint.Render("video ")+styleDim.Render("mkv auto-converts to mp4 after download · press c to convert manually"))
+		styleFaint.Render("keys  ") + styleDim.Render("m move · r relink · d delete data"),
 	}
 	return strings.Join(lines, "\n")
 }

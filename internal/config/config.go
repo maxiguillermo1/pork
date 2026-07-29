@@ -70,9 +70,6 @@ type Config struct {
 	ListenPort            int                       `yaml:"listen_port"`
 	SearchTimeoutSeconds  int                       `yaml:"search_timeout_seconds"`
 	PreviewBeforeDownload bool                      `yaml:"preview_before_download"`
-	VideoDefaultFormat    string                    `yaml:"video_default_format"`
-	RemuxMKVToMP4         bool                      `yaml:"remux_mkv_to_mp4"`
-	RemoveMKVAfterRemux   bool                      `yaml:"remove_mkv_after_remux"`
 	HideNSFW              bool                      `yaml:"hide_nsfw"`
 	Ranking               rank.Weights              `yaml:"ranking"`
 	Autopilot             AutopilotConfig           `yaml:"autopilot"`
@@ -87,22 +84,6 @@ type Config struct {
 
 func (c *Config) SearchTimeout() time.Duration {
 	return time.Duration(c.SearchTimeoutSeconds) * time.Second
-}
-
-// VideoRemuxEnabled reports whether completed MKV files should be remuxed to
-// MP4. Only MP4 is supported as the default video container today.
-func (c *Config) VideoRemuxEnabled() bool {
-	if c == nil {
-		return false
-	}
-	format := strings.ToLower(strings.TrimSpace(c.VideoDefaultFormat))
-	if format == "" {
-		format = "mp4"
-	}
-	if format != "mp4" {
-		return false
-	}
-	return c.RemuxMKVToMP4
 }
 
 // OverrideDownloadDir points downloads at dir (expanding a leading ~) and
@@ -196,9 +177,6 @@ func Default(dir string) *Config {
 		ListenPort:            0,
 		SearchTimeoutSeconds:  15,
 		PreviewBeforeDownload: true,
-		VideoDefaultFormat:    "mp4",
-		RemuxMKVToMP4:         true,
-		RemoveMKVAfterRemux:   true,
 		HideNSFW:              true,
 		Ranking:               rank.DefaultWeights(),
 		Autopilot:             AutopilotConfig{MaxDownloads: 10, MinSeeders: 5},

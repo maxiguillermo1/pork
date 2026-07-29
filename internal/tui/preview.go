@@ -267,8 +267,7 @@ func (a *App) viewPreview() string {
 		flagged = styleFaint.Render(" · ") + styleHealthMid.Render(fmt.Sprintf("⚠ %d flagged", n))
 	}
 	b.WriteString(" " + styleOK.Render(fmt.Sprintf("selected %d of %d", p.selectedFiles(), len(p.files))) +
-		styleFaint.Render(" · ") + styleDim.Render(humanBytes(p.selectedBytes())) + flagged +
-		a.previewRemuxHint(p) + "\n")
+		styleFaint.Render(" · ") + styleDim.Render(humanBytes(p.selectedBytes())) + flagged + "\n")
 
 	lay := newPreviewLayout(width)
 	b.WriteString(" " + padRight("", 2) + " " +
