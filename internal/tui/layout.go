@@ -158,14 +158,15 @@ func newResultsLayout(width int) resultsLayout {
 	return l
 }
 
-// previewLayout: gutter box icon name · risk · bar · size.
+// previewLayout: gutter box icon name · ext · risk · bar · size.
 type previewLayout struct {
-	nameW, barW, sizeW int
+	nameW, extW, barW, sizeW int
 }
 
 func newPreviewLayout(width int) previewLayout {
-	l := previewLayout{barW: 8, sizeW: 10}
-	l.nameW = flexW(width, 16, 1+2+2+2+l.barW+1+l.sizeW)
+	l := previewLayout{extW: 4, barW: 8, sizeW: 10}
+	// checkbox + gaps + ext + risk + bar + size
+	l.nameW = flexW(width, 16, 1+2+2+1+l.extW+1+1+l.barW+1+l.sizeW)
 	return l
 }
 

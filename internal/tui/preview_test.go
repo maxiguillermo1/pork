@@ -113,3 +113,39 @@ func TestPreviewExistingPausedTorrentDoesNotMutateIt(t *testing.T) {
 		t.Fatalf("preview changed saved options: before=%+v after=%+v", before, after)
 	}
 }
+
+func TestFileExtLabel(t *testing.T) {
+	cases := map[string]string{
+		"movie.1080p.mkv":  "MKV",
+		"clip.web-dl.mp4":  "MP4",
+		"sample.m4v":       "M4V",
+		"readme.txt":       "TXT",
+		"noext":            "",
+		"archive.torrent": "TORR",
+	}
+	for name, want := range cases {
+		if got := fileExtLabel(name); got != want {
+			t.Errorf("fileExtLabel(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
+func TestPreviewRenderShowsExtensionBadge(t *testing.T) {
+	files := []engine.FileInfo{
+		{Index: 0, Path: "Movie.2024.1080p.mkv", Length: 4_200_000_000},
+		{Index: 1, Path: "Movie.2024.1080p.mp4", Length: 2_100_000_000},
+	}
+	root := buildFileTree(files)
+	p := previewModel{files: files, tree: root, ready: true, excluded: map[int]bool{}}
+	p.rebuildRows()
+	lay := newPreviewLayout(100)
+	mkv := p.renderNode(p.rows[0], lay, files[0].Length)
+	mp4 := p.renderNode(p.rows[1], lay, files[1].Length)
+	if !strings.Contains(mkv, "MKV") {
+		t.Fatalf("mkv row missing badge: %q", mkv)
+	}
+	if !strings.Contains(mp4, "MP4") {
+		t.Fatalf("mp4 row missing badge: %q", mp4)
+	}
+}
+

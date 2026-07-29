@@ -267,9 +267,14 @@ func (a *App) viewPreview() string {
 		flagged = styleFaint.Render(" · ") + styleHealthMid.Render(fmt.Sprintf("⚠ %d flagged", n))
 	}
 	b.WriteString(" " + styleOK.Render(fmt.Sprintf("selected %d of %d", p.selectedFiles(), len(p.files))) +
-		styleFaint.Render(" · ") + styleDim.Render(humanBytes(p.selectedBytes())) + flagged + "\n\n")
+		styleFaint.Render(" · ") + styleDim.Render(humanBytes(p.selectedBytes())) + flagged + "\n")
 
 	lay := newPreviewLayout(width)
+	b.WriteString(" " + padRight("", 2) + " " +
+		padRight(styleFaint.Render("file"), lay.nameW) + " " +
+		padRight(styleFaint.Render("fmt"), lay.extW) + " " +
+		padRight("", 1) + " " +
+		padRight(styleFaint.Render("size"), lay.barW+1+lay.sizeW) + "\n\n")
 	maxFile := p.largestFile()
 	b.WriteString(renderWindow(&p.win, len(p.rows), a.previewRows(), width, func(i int, selected bool) string {
 		return p.renderNode(p.rows[i], lay, maxFile)
@@ -338,6 +343,7 @@ func (p *previewModel) renderNode(n *fileNode, lay previewLayout, maxFile int64)
 	size := n.length
 	bar := ""
 	risk := ""
+	ext := ""
 	if n.fileIdx >= 0 {
 		if f, ok := p.fileByIndex(n.fileIdx); ok {
 			size = f.Length
@@ -345,6 +351,7 @@ func (p *previewModel) renderNode(n *fileNode, lay previewLayout, maxFile int64)
 			if riskFor(f.Path) != "" {
 				risk = styleHealthMid.Render("⚠")
 			}
+			ext = fileExtBadge(n.name)
 		}
 	} else {
 		if n.collapsed {
@@ -359,9 +366,10 @@ func (p *previewModel) renderNode(n *fileNode, lay previewLayout, maxFile int64)
 		nameW = 8
 	}
 	name := strings.Repeat("  ", n.depth) + icon + " " + truncate(n.name, nameW)
-	line := fmt.Sprintf("%s  %s %s %s %*s",
+	line := fmt.Sprintf("%s  %s %s %s %s %*s",
 		p.checkbox(n),
 		padRight(name, lay.nameW),
+		padRight(ext, lay.extW),
 		padRight(risk, 1),
 		bar,
 		lay.sizeW, humanBytes(size),
@@ -388,6 +396,44 @@ func fileSizeBar(size, maxSize int64, cells int) string {
 	filled = max(1, min(cells, filled))
 	return styleSeeders.Render(strings.Repeat("▓", filled)) +
 		styleFaint.Render(strings.Repeat("░", cells-filled))
+}
+
+func fileExtLabel(name string) string {
+	ext := strings.ToUpper(strings.TrimPrefix(pathExt(name), "."))
+	if ext == "" {
+		return ""
+	}
+	if len(ext) > 4 {
+		return ext[:4]
+	}
+	return ext
+}
+
+func fileExtBadge(name string) string {
+	label := fileExtLabel(name)
+	if label == "" {
+		return ""
+	}
+	switch label {
+	case "MKV":
+		return lipgloss.NewStyle().Bold(true).Foreground(colViolet).Render(label)
+	case "MP4", "M4V":
+		return lipgloss.NewStyle().Bold(true).Foreground(colBlue).Render(label)
+	case "WEBM":
+		return lipgloss.NewStyle().Bold(true).Foreground(colGreen).Render(label)
+	case "AVI", "MOV", "WMV", "FLV":
+		return styleDim.Render(label)
+	case "MP3", "FLAC", "M4A", "AAC", "OGG", "WAV":
+		return styleStateTag.Render(label)
+	case "SRT", "ASS", "SSA", "VTT":
+		return styleFaint.Render(label)
+	case "ZIP", "RAR", "7Z", "TAR", "GZ", "XZ", "BZ2":
+		return styleHealthMid.Render(label)
+	case "ISO", "IMG":
+		return styleDim.Render(label)
+	default:
+		return styleFaint.Render(label)
+	}
 }
 
 func fileKind(name string) (icon, label string) {
