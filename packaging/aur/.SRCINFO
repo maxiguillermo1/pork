@@ -1,0 +1,14 @@
+pkgbase = pork
+	pkgdesc = Terminal torrent search and download client
+	pkgver = 0.2.0
+	pkgrel = 1
+	url = https://github.com/maxiguillermo1/pork
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	makedepends = go
+	depends = glibc
+	source = pork-0.2.0.tar.gz::https://github.com/maxiguillermo1/pork/archive/refs/tags/v0.2.0.tar.gz
+	sha256sums = 3d9b1440e6dbc8156546157326f452b91786ac0782bffb9c28576eaee3f2674d
+
+pkgname = pork
