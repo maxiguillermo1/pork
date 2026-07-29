@@ -22,6 +22,7 @@ import (
 	"github.com/anacrolix/torrent/storage"
 
 	"github.com/maxiguillermo1/pork/internal/config"
+	"github.com/maxiguillermo1/pork/internal/convert"
 )
 
 type TorrentState int
@@ -534,6 +535,42 @@ func (e *Engine) Files(h metainfo.Hash) ([]FileInfo, bool) {
 		out[i] = FileInfo{Index: i, Path: f.Path(), Length: f.Length()}
 	}
 	return out, true
+}
+
+// MKVPaths returns absolute paths of downloaded MKV files that still need
+// remuxing to MP4. Caller must hold no engine locks.
+func (e *Engine) MKVPaths(h metainfo.Hash) []string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	it, ok := e.items[h]
+	if !ok || it.t == nil || it.t.Info() == nil {
+		return nil
+	}
+	ex := make(map[int]bool, len(it.excluded))
+	for _, i := range it.excluded {
+		ex[i] = true
+	}
+	var mkvs []string
+	for i, f := range it.t.Files() {
+		if ex[i] {
+			continue
+		}
+		p := f.Path()
+		if !strings.EqualFold(filepath.Ext(p), ".mkv") {
+			continue
+		}
+		abs, ok := safeDataPath(it.downloadDir, p)
+		if !ok {
+			continue
+		}
+		if st, err := os.Stat(abs); err != nil || st.IsDir() {
+			continue
+		}
+		if convert.NeedsRemux(abs) {
+			mkvs = append(mkvs, abs)
+		}
+	}
+	return mkvs
 }
 
 // StartDownload flips a previewing torrent to downloading, excluding the

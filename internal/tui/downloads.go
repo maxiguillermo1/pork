@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/maxiguillermo1/pork/internal/convert"
 	"github.com/maxiguillermo1/pork/internal/engine"
 	"github.com/maxiguillermo1/pork/internal/state"
 )
@@ -650,6 +651,9 @@ func (a *App) renderDownloadItem(it downloadItem, selected bool, width int) stri
 	if it.Note != "" {
 		stats += "   " + styleFaint.Render(it.Note)
 	}
+	if note := a.conversionNote(it.Magnet); note != "" {
+		stats += "   " + styleOK.Render(note)
+	}
 	return name + "\n" + bar + "\n" + styleDim.Render(stats) + "\n"
 }
 
@@ -681,6 +685,9 @@ func (a *App) downloadDetail(it downloadItem, width int) string {
 		styleFaint.Render("seed  ") + styleDim.Render(seed) + styleFaint.Render("   status  ") + stateBadge(it.State),
 		styleFaint.Render("size  ") + styleDim.Render(fmt.Sprintf("%s selected", humanBytes(it.Length))),
 		styleFaint.Render("keys  ") + styleDim.Render("m move folder · r relink existing files · d delete data"),
+	}
+	if a.remuxEnabled() && convert.Available() {
+		lines = append(lines, styleFaint.Render("video ")+styleDim.Render("mkv → mp4 remux after download (ffmpeg stream copy)"))
 	}
 	return strings.Join(lines, "\n")
 }

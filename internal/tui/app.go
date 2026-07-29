@@ -47,6 +47,7 @@ type App struct {
 
 	errText      string
 	lastTickSave time.Time // throttles progress-only state.json writes on the tick
+	convertJobs  map[string]*convertJob
 }
 
 func New(cfg *config.Config, eng *engine.Engine, agg *aggregator.Aggregator, st *state.State, hs *health.Store) *App {
@@ -82,6 +83,9 @@ func (a *App) Init() tea.Cmd {
 	if proxyCmd := a.startProxyCheck(time.Now()); proxyCmd != nil {
 		cmds = append(cmds, proxyCmd)
 	}
+	if remuxCmd := a.queueRemuxForCompleted(); remuxCmd != nil {
+		cmds = append(cmds, remuxCmd)
+	}
 	return tea.Batch(cmds...)
 }
 
@@ -114,15 +118,23 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		a.downloads.snaps = a.eng.Snapshots()
 		saveCmd := a.syncCompletedToState()
+		remuxCmd := a.queueRemuxForCompleted()
 		proxyCmd := a.startProxyCheck(time.Time(msg))
 		if a.screen == screenPreview {
 			a.preview.refresh(a.eng)
 		}
-		if a.tickShouldContinue() {
-			return a, tea.Batch(saveCmd, proxyCmd, tickCmd(a.tickInterval()))
+		if a.tickShouldContinue() || a.conversionsActive() {
+			return a, tea.Batch(saveCmd, remuxCmd, proxyCmd, tickCmd(a.tickInterval()))
 		}
 		a.downloads.ticking = false
-		return a, tea.Batch(saveCmd, proxyCmd)
+		return a, tea.Batch(saveCmd, remuxCmd, proxyCmd)
+
+	case convertDoneMsg:
+		cmd := a.onConvertDone(msg)
+		if a.conversionsActive() || a.tickShouldContinue() {
+			return a, tea.Batch(cmd, tickCmd(a.tickInterval()))
+		}
+		return a, cmd
 
 	case torrentAddedMsg:
 		return a, a.onTorrentAdded(msg)

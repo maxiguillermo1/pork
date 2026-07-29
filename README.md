@@ -18,6 +18,8 @@ actual swarm, and keep downloads in one calm little terminal app.
   source, and noisy results before you download.
 - Preview a magnet, queue it with one key, then pause, verify, seed, move, or
   relink it from the downloads screen.
+- **MKV → MP4 remux** after download (ffmpeg stream copy — no re-encode, keeps
+  video/audio quality). MP4 is the default video container; disable in config.
 - Browse and grab current official Linux ISOs from Ubuntu, Debian, Fedora,
   Arch, NixOS, Proxmox, and more. No sketchy mirror hunting.
 - Run `pork doctor` when a provider or local setup feels off, and use the swarm
@@ -42,6 +44,14 @@ CC=/usr/bin/clang CXX=/usr/bin/clang++ go install github.com/maxiguillermo1/pork
 
 Config lives in `~/.pork/`; downloads land in `~/Downloads/pork` (change with
 `pork -d DIR`).
+
+Video defaults (in `~/.pork/config.yaml`):
+
+```yaml
+video_default_format: mp4      # default container for video
+remux_mkv_to_mp4: true         # remux completed .mkv files to .mp4 (needs ffmpeg)
+remove_mkv_after_remux: true   # delete the .mkv after a successful remux
+```
 
 ## SOCKS5 proxy
 
